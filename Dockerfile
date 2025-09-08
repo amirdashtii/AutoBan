@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for AutoBan project
 
 # Backend build stage
-FROM golang:1.21-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 WORKDIR /backend
 COPY backend/ .
 # Download deps using go.mod for better cache
