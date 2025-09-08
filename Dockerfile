@@ -4,8 +4,16 @@
 FROM golang:1.21-alpine AS backend-builder
 WORKDIR /backend
 COPY backend/ .
+# Download deps using go.mod for better cache
 RUN go mod download
-RUN go build -o main .
+# Build backend binary (static)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main ./cmd/app
+
+# Frontend deps stage (prod deps only)
+FROM node:18-alpine AS frontend-deps
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci --omit=dev
 
 # Frontend build stage
 FROM node:18-alpine AS frontend-builder
@@ -19,9 +27,6 @@ RUN npm run build
 FROM node:18-alpine
 WORKDIR /app
 
-# Install Go runtime for backend
-RUN apk add --no-cache go
-
 # Copy backend binary and config
 COPY --from=backend-builder /backend/main ./backend/
 COPY --from=backend-builder /backend/config ./backend/config/
@@ -30,10 +35,10 @@ COPY --from=backend-builder /backend/config ./backend/config/
 COPY --from=frontend-builder /frontend/.next ./.next
 COPY --from=frontend-builder /frontend/public ./public
 COPY --from=frontend-builder /frontend/package.json ./package.json
-COPY --from=frontend-builder /frontend/node_modules ./node_modules
+COPY --from=frontend-deps /frontend/node_modules ./node_modules
 
 # Expose ports
 EXPOSE 3000 8080
 
-# Start both services
+# Start both services (backend on 8080, frontend on 3000)
 CMD ["sh", "-c", "cd backend && ./main & npm start"]
